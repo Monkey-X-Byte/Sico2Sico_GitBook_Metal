@@ -21,7 +21,7 @@
    CVMetalTextureCacheCreateTextureFromImage(kCFAllocatorDefault, metalTextureCache, pixelBuffer, nil, MTLPixelFormat.bgra8Unorm, width, height, 0, &texture)
    ```
 
-3.    
+3. 
 
    ```swift
    //IOSurface
@@ -32,7 +32,7 @@
    
    ```
 
-4.  
+4. 
 
    ```swift
    暂时的理解是 纹理和 缓存数据 进行了绑定 中间有一个高速拷贝内存区 IOSurface 供 GPU和CPU 访问
