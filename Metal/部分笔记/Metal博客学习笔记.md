@@ -1,5 +1,5 @@
 
-Metal框架详细解析（二十七）书签
+ Metal框架详细解析（二十七）书签
 * https://www.jianshu.com/p/ad2ceae81a2b  刀客传奇
 
 * https://www.jianshu.com/p/dd63527a7a10 [张芳涛](https://www.jianshu.com/u/2d441a5445ed)
@@ -456,7 +456,7 @@ if (!myLibrary) {
   ```
 
   ```swift
-   [renderEncoder setVertexBuffer:_vertexBuffer
+   [renderEncoder setVertexBuffer:_vertexBuffer 
                             offset:0
                            atIndex:AAPLVertexInputIndexVertices];
     
@@ -652,6 +652,317 @@ if (!myLibrary) {
   ![图片](./image/2.png)
 
 
+
+* 创建缓冲区对象  Creating a Buffer Object 
+
+  ```swift
+  /// 1 newBufferWithLength:options: 方法创建具有新存储分配的MTLBuffer对象。
+  
+  /// 2 newBufferWithBytes:length:options:方法通过将数据从现有存储（位于CPU地址指针）复制到新的存储分配中来创建MTLBuffer对象。
+  
+  /// 3 newBufferWithBytesNoCopy:length:options:deallocator:方法创建具有现有存储分配的MTLBuffer对象，并且不为此对象分配任何新存储
+  
+  /// 需要了解 MTLResource 这个协议
+  
+  ```
+
+* 从编译代码创建 Creating a Library from Compiled Code 
+
+  ```swift
+  /// 1 newDefaultLibrary检索为主包构建的库，该库包含应用程序Xcode项目中的所有着色器和计算函数。
+  
+  /// 2 newLibraryWithFile:error:获取库文件的路径并返回包含存储在该库文件中的所有函数的MTLLibrary对象。
+  
+  /// 3 newLibraryWithData:error:获取包含库中函数代码的二进制blob，并返回MTLLibrary对象。
+  
+  /// 4 newLibraryWithSource:options:error:从输入字符串同步编译源代码以创建MTLFunction对象，然后返回包含它们的MTLLibrary对象。
+  
+  /// 5 newLibraryWithSource:options:completionHandler:异步编译输入字符串中的源代码以创建MTLFunction对象，然后返回包含它们的MTLLibrary对象。 completionHandler是在完成对象创建时调用的代码块。
+  ```
+
+
+
+* 整体的一个框架
+
+  ![img](./image/3.png)
+
+
+
+* 为渲染命令编码器指定资源 - Specifying Resources for a Render Command Encoder
+
+  ![img4](./image/4.png)
+
+  ​	
+
+  ```swift
+  /// 以下setVertex *方法将一个或多个资源分配给顶点着色器函数的相应参数。
+  
+  setVertexBuffer:offset:atIndex:
+  setVertexBuffers:offsets:withRange:
+  setVertexTexture:atIndex:
+  setVertexTextures:withRange:
+  setVertexSamplerState:atIndex:
+  setVertexSamplerState:lodMinClamp:lodMaxClamp:atIndex:
+  setVertexSamplerStates:withRange:
+  setVertexSamplerStates:lodMinClamps:lodMaxClamps:withRange:
+  
+  
+  /// 这些setFragment *方法类似地将一个或多个资源分配给片段着色器函数的相应参数。
+  
+  setFragmentBuffer:offset:atIndex:
+  setFragmentBuffers:offsets:withRange:
+  setFragmentTexture:atIndex:
+  setFragmentTextures:withRange:
+  setFragmentSamplerState:atIndex:
+  setFragmentSamplerState:lodMinClamp:lodMaxClamp:atIndex:
+  setFragmentSamplerStates:withRange:
+  setFragmentSamplerStates:lodMinClamps:lodMaxClamps:withRange:
+  ```
+
+
+
+* 据组织的顶点描述符   MTLVertexDescriptor  Vertex Descriptor for Data Organization
+
+  ```swift
+  Listing 5-11  Metal Shading Language: Vertex Function Inputs with Attribute Indices
+  
+  struct VertexInput {
+      float2    position [[ attribute(0) ]];
+      float4    color    [[ attribute(1) ]];
+      float2    uv1      [[ attribute(2) ]];
+      float2    uv2      [[ attribute(3) ]];
+  };
+  
+  struct VertexOutput {
+      float4 pos [[ position ]];
+      float4 color;
+  };
+  
+  vertex VertexOutput vertexMath(VertexInput in [[ stage_in ]])
+  {
+    VertexOutput out;
+    out.pos = float4(in.position.x, in.position.y, 0.0, 1.0);
+  
+    float sum1 = in.uv1.x + in.uv2.x;
+    float sum2 = in.uv1.y + in.uv2.y;
+    out.color = in.color + float4(sum1, sum2, 0.0f, 0.0f);
+    return out;
+  }
+  
+  ```
+
+  ​	
+
+  ​	![img5](./image/5.png)
+
+
+
+  ```swift 
+  Listing 5-12  Metal Framework: Using a Vertex Descriptor to Access Interleaved Data
+  
+  id <MTLFunction> vertexFunc = [library newFunctionWithName:@"vertexMath"];            
+  MTLRenderPipelineDescriptor* pipelineDesc =      
+                               [[MTLRenderPipelineDescriptor alloc] init];
+  MTLVertexDescriptor* vertexDesc = [[MTLVertexDescriptor alloc] init];
+  
+  vertexDesc.attributes[0].format = MTLVertexFormatFloat2;
+  vertexDesc.attributes[0].bufferIndex = 0;
+  vertexDesc.attributes[0].offset = 0;
+  vertexDesc.attributes[1].format = MTLVertexFormatFloat4;
+  vertexDesc.attributes[1].bufferIndex = 0;
+  vertexDesc.attributes[1].offset = 2 * sizeof(float);  // 8 bytes
+  vertexDesc.attributes[2].format = MTLVertexFormatFloat2;
+  vertexDesc.attributes[2].bufferIndex = 0;
+  vertexDesc.attributes[2].offset = 8 * sizeof(float);  // 32 bytes
+  vertexDesc.attributes[3].format = MTLVertexFormatFloat2;
+  vertexDesc.attributes[3].bufferIndex = 0;
+  vertexDesc.attributes[3].offset = 6 * sizeof(float);  // 24 bytes
+  vertexDesc.layouts[0].stride = 10 * sizeof(float);    // 40 bytes
+  vertexDesc.layouts[0].stepFunction = MTLVertexStepFunctionPerVertex;
+  
+  pipelineDesc.vertexDescriptor = vertexDesc;
+  pipelineDesc.vertexFunction = vertFunc;
+  
+  /// 需要备注的是 这个地方的偏移量并没错误 看图和图结合就知道 可以自定义存放的位置 很🐂哦
+  ```
+
+
+
+
+* 使用多个线程编码单个渲染通道 - Encoding a Single Rendering Pass Using Multiple Threads
+
+  ```swift
+    Listing 5-16  A Parallel Rendering Encoder with Three Render Command Encoders
+  
+  
+    MTLRenderPassDescriptor *renderPassDesc = [MTLRenderPassDescriptor renderPassDescriptor];
+    renderPassDesc.colorAttachments[0].texture = currentTexture;
+    renderPassDesc.colorAttachments[0].loadAction = MTLLoadActionClear;
+    renderPassDesc.colorAttachments[0].clearColor = MTLClearColorMake(0.0,0.0,0.0,1.0);
+  
+    id <MTLParallelRenderCommandEncoder> parallelRCE = [commandBuffer 
+   parallelRenderCommandEncoderWithDescriptor:renderPassDesc];
+    id <MTLRenderCommandEncoder> rCE1 = [parallelRCE renderCommandEncoder];
+    id <MTLRenderCommandEncoder> rCE2 = [parallelRCE renderCommandEncoder];
+    id <MTLRenderCommandEncoder> rCE3 = [parallelRCE renderCommandEncoder];
+  
+    //  not shown: rCE1, rCE2, and rCE3 call methods to encode graphics commands
+    //
+    //  rCE1 commands are processed first, because it was created first
+    //  even though rCE2 and rCE3 end earlier than rCE1
+    [rCE2 endEncoding];
+    [rCE3 endEncoding];
+    [rCE1 endEncoding];
+  
+    //  all MTLRenderCommandEncoders must end before MTLParallelRenderCommandEncoder
+    [parallelRCE endEncoding]
+  
+  ```
+
+
+
+
+
+* # Command Encoder - 数据并行计算处理：计算命令编码器
+
+  * ### 创建计算管道状态 - Creating a Compute Pipeline State
+
+  ```swift
+  ///要同步创建计算管道状态对象，请调用MTLDevice的方法 这些方法阻塞当前线程，而Metal编译着色器代码以创建管道状态对象。
+  
+  newComputePipelineStateWithFunction:error:
+  newComputePipelineStateWithFunction:options:reflection:error:
+  
+  /// 要异步创建计算管道状态对象
+  newComputePipelineStateWithFunction:completionHandler:
+  newComputePipelineStateWithFunction:options:completionHandler:
+  ```
+
+  * ### 为计算命令编码器指定计算状态和资源 Compute Command Encoder -
+
+  ```swift
+  /// 以下MTLComputeCommandEncoder方法指定一个资源（即缓冲区，纹理，采样器状态或线程组内存），该资源用作MTLComputePipelineState对象表示的计算函数的参数。
+  
+  setBuffer:offset:atIndex:
+  setBuffers:offsets:withRange:
+  setTexture:atIndex:
+  setTextures:withRange:
+  setSamplerState:atIndex:
+  setSamplerState:lodMinClamp:lodMaxClamp:atIndex:
+  setSamplerStates:withRange:
+  setSamplerStates:lodMinClamps:lodMaxClamps:withRange:
+  setThreadgroupMemoryLength:atIndex:
+  ```
+
+  ![img6](./image/6.png)
+
+  ```swift
+  // Listing 6-1  Specifying and Running a Function in a Compute State
+  
+  id <MTLDevice> device;
+  id <MTLLibrary> library;
+  id <MTLCommandQueue> commandQueue;
+   
+  id <MTLTexture> inputImage;
+  id <MTLTexture> outputImage;
+  id <MTLTexture> inputTableData;
+  id <MTLBuffer> paramsBuffer;
+   
+  // ... Create and initialize device, library, queue, resources
+   
+  // Obtain a new command buffer
+  id <MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
+   
+  // Create a compute command encoder
+  id <MTLComputeCommandEncoder> computeCE = [commandBuffer computeCommandEncoder];
+   
+  NSError *errors;
+  id <MTLFunction> func = [library newFunctionWithName:@"filter_main"];
+  id <MTLComputePipelineState> filterState
+                = [device newComputePipelineStateWithFunction:func error:&errors];
+  [computeCE setComputePipelineState:filterState];
+  [computeCE setTexture:inputImage atIndex:0];
+  [computeCE setTexture:outputImage atIndex:1];
+  [computeCE setTexture:inputTableData atIndex:2];
+  [computeCE setBuffer:paramsBuffer offset:0 atIndex:0];
+   
+  MTLSize threadsPerGroup = {16, 16, 1};
+  MTLSize numThreadgroups = {inputImage.width/threadsPerGroup.width,
+                             inputImage.height/threadsPerGroup.height, 1};
+   
+  [computeCE dispatchThreadgroups:numThreadgroups
+                                  threadsPerThreadgroup:threadsPerGroup];
+  [computeCE endEncoding];
+   
+  // Commit the command buffer
+  [commandBuffer commit]
+  
+  
+  
+  /// Shader 
+  
+  Listing 6-2  Shading Language Compute Function Declaration
+  
+  kernel void filter_main(
+    texture2d<float,access::read>   inputImage   [[ texture(0) ]],
+    texture2d<float,access::write>  outputImage  [[ texture(1) ]],
+    uint2 gid                                    [[ thread_position_in_grid ]],
+    texture2d<float,access::sample> table        [[ texture(2) ]],
+    constant Parameters* params                  [[ buffer(0) ]]
+    )
+  {
+    float2 p0          = static_cast<float2>(gid);
+    float3x3 transform = params->transform;
+    float4   dims      = params->dims;
+    
+    float4 v0 = read_and_transform(inputImage, p0, transform);
+    float4 v1 = filter_table(v0,table, dims);
+    
+    outputImage.write(v1,gid);
+  }
+  ```
+
+​	
+
+
+
+
+
+* # Blit Command Encoder - 缓冲和纹理操作
+
+  ```swift
+  /// 提供了在资源（缓冲区和纹理）之间复制数据的方法。 数据复制操作对于图像处理和纹理效果（例如模糊或反射）可能是必需的。 它们可用于访问在屏幕外渲染的图像数据
+  ```
+
+  ```swift
+  /// 1. Copying Data Between Two Buffers - 在两个缓冲区之间复制数据
+  copyFromBuffer:sourceOffset:toBuffer:destinationOffset:size:
+  
+  /// 2. Copying Data from a Buffer to a Texture - 将数据从缓冲区复制到纹理
+  copyFromBuffer:sourceOffset:sourceBytesPerRow:sourceBytesPerImage:sourceSize:toTexture:destinationSlice:destinationLevel:destinationOrigin:
+  
+  /// 3. Copying Data Between Two Textures - 在两个纹理之间复制数据
+  copyFromTexture:sourceSlice:sourceLevel:sourceOrigin:sourceSize:toTexture:destinationSlice:destinationLevel:destinationOrigin:
+  
+  /// 4. Copying Data from a Texture to a Buffer - 将数据从纹理复制到缓冲区
+  copyFromTexture:sourceSlice:sourceLevel:sourceOrigin:sourceSize:toBuffer:destinationOffset:destinationBytesPerRow:destinationBytesPerImage:
+  ```
+
+
+
+* MetalLib库的构建
+
+
+
+  ![image7](./image/7.png)
+
+
+
+  ```swift
+  xcrun -sdk macosx metal mylibrayfile.metal -0 myLibrary.air
+  
+  xcrun -sdk macosx metallib myLibrary.air -o yyLibrary.metallib
+  ```
 
 
 
